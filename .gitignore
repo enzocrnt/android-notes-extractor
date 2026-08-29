@@ -1,0 +1,26 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+venv/
+.venv/
+
+# Ignore exported journal folders and markdown outputs
+my_exported_journals/
+extracted_backup/
+*.ab
+*.tar
+*.db
+*.sqlite
+*.sql
+
+# Ignore screen hierarchy inspection dumps & logs
+screen_dump.xml
+*.log
+
+# OS & Editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
