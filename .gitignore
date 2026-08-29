@@ -5,18 +5,36 @@ __pycache__/
 *.env
 venv/
 .venv/
+env/
 
-# Ignore exported journal folders and markdown outputs
+# Ignore actual note contents & backups (keeps personal notes private)
+Tecno/journal_entries/
+Tecno/uncategorized/
+Tecno/raw_exports/
+Xiaomi/journal_entries/
+Xiaomi/uncategorized/
+Xiaomi/raw_exports/
+Xiaomi/dream_journal/
+backups/
+exported_notes/
+exported_notes_xiaomi/
 my_exported_journals/
 extracted_backup/
+
+# Exclude generated title exports and sensitive notes data
+*.txt
+*.md
+!README.md
+
+# Database & ADB backup dumps
 *.ab
 *.tar
 *.db
 *.sqlite
 *.sql
 
-# Ignore screen hierarchy inspection dumps & logs
-screen_dump.xml
+# Screen hierarchy inspection XML dumps & logs
+*.xml
 *.log
 
 # OS & Editor metadata
