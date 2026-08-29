@@ -1,120 +1,121 @@
 import uiautomator2 as u2
-import time
 import os
+import time
 import re
 
 d = u2.connect()
-output_dir = "my_exported_journals"
+
+output_dir = "exported_notes"
 os.makedirs(output_dir, exist_ok=True)
 
-# Load existing files to prevent re-extracting
-processed_titles = set()
-for existing_file in os.listdir(output_dir):
-    if existing_file.endswith(".md"):
-        base = os.path.splitext(existing_file)[0]
-        base = re.sub(r'_\d+$', '', base)
-        processed_titles.add(base)
+processed_files = set(os.listdir(output_dir))
+total_exported = len(processed_files)
 
-consecutive_no_new = 0
-print(f"Starting automatic export ({len(processed_titles)} already backed up)...")
+APP_PKG = "com.transsion.notebook"
+APP_ACT = "com.transsion.notebook.activity.MainActivity"
 
-def ensure_in_notes_app():
-    """Ensure the notes app is actively open and in the foreground."""
-    current = d.app_current().get("package", "")
-    if current != "com.transsion.notebook":
+def sanitize_filename(title, max_length=50):
+    sanitized = re.sub(r'[\\/*?:"<>|]', "", title).strip()
+    sanitized = re.sub(r'\s+', ' ', sanitized)
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length].rstrip()
+    return sanitized if sanitized else "Untitled"
+
+def ensure_app_foreground():
+    current = d.app_current()
+    if current.get('package') != APP_PKG:
         print("Notes app exited. Relaunching...")
-        d.app_start("com.transsion.notebook")
-        time.sleep(2.0)
+        d.app_start(APP_PKG, APP_ACT)
+        time.sleep(1.5)
 
-ensure_in_notes_app()
+print(f"Starting extraction. Found {total_exported} previously exported notes.")
 
-while consecutive_no_new < 12:
-    ensure_in_notes_app()
+stuck_count = 0
+prev_first_title = ""
 
-    title_elements = d(resourceId="com.transsion.notebook:id/title")
-    found_new_in_batch = False
+while True:
+    ensure_app_foreground()
+    
+    note_cards = d(resourceId="com.transsion.notebook:id/note_card")
+    count = note_cards.count
+    
+    if count == 0:
+        print("No note cards visible.")
+        break
 
-    titles_to_click = []
-    for el in title_elements:
+    current_first_title = ""
+    try:
+        title_widget = note_cards[0].child(resourceId="com.transsion.notebook:id/note_title")
+        if title_widget.exists:
+            current_first_title = title_widget.get_text()
+    except Exception:
+        pass
+
+    found_new = False
+
+    for i in range(count):
         try:
-            t = el.get_text()
-            if not t:
-                continue
-            short_id = re.sub(r'[\\/*?:"<>|\n\r]', "_", t)[:50].strip()
-            if short_id not in processed_titles and t not in ["All", "Notes", "Recently Deleted", "Folders", "Journal", "Info", "Dream"]:
-                titles_to_click.append(t)
-        except Exception:
-            continue
-
-    for title in titles_to_click:
-        ensure_in_notes_app()
-        short_id = re.sub(r'[\\/*?:"<>|\n\r]', "_", title)[:50].strip()
-        if short_id in processed_titles:
-            continue
-
-        try:
-            target = d(resourceId="com.transsion.notebook:id/title", text=title)
-            if not target.exists:
+            card = note_cards[i]
+            if not card.exists:
                 continue
 
-            print(f"--> Extracting: {title[:60]}...")
-            target.click()
-            time.sleep(0.8)
+            card.click()
+            time.sleep(0.4)
 
-            # Extract full text inside note
-            content_pieces = []
-            for node in d(className="android.widget.EditText"):
-                txt = node.get_text()
-                if txt and txt not in content_pieces:
-                    content_pieces.append(txt)
+            title_elem = d(resourceId="com.transsion.notebook:id/title_content")
+            date_elem = d(resourceId="com.transsion.notebook:id/date_content")
+            body_elem = d(resourceId="com.transsion.notebook:id/note_content_view")
 
-            if not content_pieces:
-                for node in d(className="android.widget.TextView"):
-                    info = node.info or {}
-                    res_name = info.get("resourceName") or ""
-                    if any(k in res_name for k in ["content", "editor", "text_body", "note"]):
-                        txt = node.get_text()
-                        if txt and txt not in content_pieces:
-                            content_pieces.append(txt)
+            title = title_elem.get_text() if title_elem.exists else "Untitled"
+            date_str = date_elem.get_text() if date_elem.exists else ""
+            body = body_elem.get_text() if body_elem.exists else ""
 
-            body_text = "\n\n".join(content_pieces) if content_pieces else "(Empty Note)"
+            safe_title = sanitize_filename(title)
+            filename = f"{safe_title}.md"
+            filepath = os.path.join(output_dir, filename)
 
-            # Safe filename capped at 50 chars
-            safe_filename = short_id if short_id else f"note_{int(time.time())}"
-            filepath = os.path.join(output_dir, f"{safe_filename}.md")
+            if filename not in processed_files:
+                counter = 1
+                while os.path.exists(filepath):
+                    filename = f"{safe_title}_{counter}.md"
+                    filepath = os.path.join(output_dir, filename)
+                    counter += 1
 
-            counter = 1
-            while os.path.exists(filepath):
-                filepath = os.path.join(output_dir, f"{safe_filename}_{counter}.md")
-                counter += 1
+                content = f"# {title}\n"
+                if date_str:
+                    content += f"**Date:** {date_str}\n\n"
+                else:
+                    content += "\n"
+                content += body
 
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(f"# {title}\n\n{body_text}\n")
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
 
-            processed_titles.add(short_id)
-            found_new_in_batch = True
+                processed_files.add(filename)
+                total_exported += 1
+                preview = title[:50] + "..." if len(title) > 50 else title
+                print(f"--> Extracting: {preview}")
+                found_new = True
 
-            # Safely return to note list
             d.press("back")
-            time.sleep(0.5)
+            time.sleep(0.2)
 
-            # If the back button exited the app, bring it right back
-            ensure_in_notes_app()
+        except Exception as e:
+            print(f"Error during note extraction: {e}")
+            d.press("back")
+            time.sleep(0.3)
 
-        except Exception as err:
-            print(f"Error on note: {err}")
-            processed_titles.add(short_id)
-            # Recover navigation if stuck
-            ensure_in_notes_app()
-
-    if found_new_in_batch:
-        consecutive_no_new = 0
+    if current_first_title == prev_first_title and not found_new:
+        stuck_count += 1
+        if stuck_count >= 3:
+            print("Reached the bottom of notes list.")
+            break
     else:
-        consecutive_no_new += 1
+        stuck_count = 0
 
-    # Scroll down smoothly
-    ensure_in_notes_app()
-    d.swipe(0.5, 0.75, 0.5, 0.25, 0.25)
-    time.sleep(1.0)
+    prev_first_title = current_first_title
 
-print(f"\nFinished! Total extracted notes: {len(processed_titles)}")
+    d.swipe(500, 1800, 500, 600, duration=0.25)
+    time.sleep(0.5)
+
+print(f"\nFinished! Total extracted notes: {total_exported}")
