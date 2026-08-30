@@ -14,21 +14,22 @@ Stock Android notes applications often restrict direct cloud export, lack bulk e
 android-notes-extractor/
 │
 ├── Tecno/
-│   ├── export_tecno_notes.py              # Automates HiOS Notebook UI extraction
-│   ├── journal_sorter_tecno.py            # Sorts notes into journal entries vs uncategorized
-│   ├── continuation_renamer_tecno.py      # Groups multi-part entries as [P1], [P2], [P3]
-│   ├── process_numeric_continuations_tecno.py
-│   └── extract_uncategorized_tecno.py     # Dumps uncategorized note titles for review
+│   ├── export_tecno_notes.py                  # Automates HiOS Notebook UI extraction
+│   ├── journal_sorter_tecno.py                # Sorts dated notes into journal_entries vs uncategorized
+│   ├── recover_missed_journals_tecno.py       # Scans uncategorized note bodies for missed date stamps
+│   ├── continuation_renamer_tecno.py          # Standardizes multi-part entries ([P1], [P2], [P3])
+│   ├── extract_uncategorized_tecno.py         # Dumps uncategorized note titles to text file
+│   └── interactive_sorter_tecno.py            # Interactive CLI sorter with live commenting feature
 │
 ├── Xiaomi/
-│   ├── export_xiaomi_notes.py             # Automates MIUI/HyperOS Notes UI extraction
-│   ├── sweep_missing_xiaomi.py            # Deep body-fingerprint sweep to recover skipped notes
-│   ├── journal_sorter_xiaomi_.py          # Formats dated Xiaomi entries into MM-DD-YYYY
-│   ├── dream_sorter_xiaomi.py             # Extracts dream logs into dedicated dream journal
-│   ├── extract_uncategorized_xiaomi.py    # Dumps uncategorized note titles for review
-│   └── verify_xiaomi_count.py             # Deep verification and content hash counter
+│   ├── export_xiaomi_notes.py                 # Automates MIUI/HyperOS Notes UI extraction
+│   ├── sweep_missing_xiaomi.py                # Deep UI sweep to recover skipped entries
+│   ├── journal_sorter_xiaomi.py               # Formats dated Xiaomi entries into MM-DD-YYYY
+│   ├── auto_categorizer_xiaomi.py             # Rule-based auto-sorter for common note categories
+│   ├── extract_uncategorized_titles_xiaomi.py # Extracts uncategorized titles for batch analysis
+│   └── interactive_sorter_xiaomi.py           # Interactive CLI sorter for Xiaomi uncategorized notes
 │
-├── backups/                               # Raw backup archives
+├── backups/                                   # Raw backup archives
 ├── requirements.txt
 ├── .gitignore
 └── README.md
@@ -40,9 +41,9 @@ android-notes-extractor/
 * **Dual-OEM Support:** Dedicated extraction pipelines tailored for both Transsion/Tecno HiOS Notebook (`com.transsion.notebook`) and Xiaomi MIUI/HyperOS Notes (`com.miui.notes`).
 * **Automated UI Traversal:** Programmatically iterates through lists, opens individual entries, triggers clipboard share targets or widget scraping, and handles vertical scroll batches.
 * **Intelligent Date Parsing:** Converts word-based and varied date stamps (`Nov. 4, 2023`, `Sept. 20, 2023`) into standard `MM-DD-YYYY` formats for chronological sorting.
-* **Multi-Part / Continuation Grouping:** Detects long split entries (`Continuation ng...`), links them to the day's main entry, and formats them into sequential tags (`[P1]`, `[P2]`, `[P3]`).
-* **Content Fingerprinting & Deduplication:** Generates normalized text hashes to prevent duplicate extraction on repeated runs.
-* **Deep Recovery Sweeps:** Sweeper module with relaxed screen boundaries and slow scroll stepping to catch missed notes.
+* **Multi-Day & Multi-Part Formatting:** Handles multi-day span titles (e.g., `11-20-2024 - [Nov. 20-21] ...`) and continuation tags (`[P1]`, `[P2]`, `[P3]`).
+* **Interactive CLI Sorter & Reflection Tool:** Single-keypress terminal interface to sort notes into dedicated category subfolders (`misc/`) with live note preview, undo history (`[B]`), and interactive "future self" commenting (`[C]`).
+* **Content Spacing Standardization:** Automatically ensures standardized 3-line separation (`\n\n\n`) between title headers and note bodies across all exports.
 * **Local & Secure:** Operates entirely over USB via ADB without transmitting personal notes to external servers.
 
 ## Prerequisites
@@ -104,12 +105,17 @@ python .\Tecno\export_tecno_notes.py
 # 2. Sort dated entries to journal_entries and the rest to uncategorized
 python .\Tecno\journal_sorter_tecno.py
 
-# 3. Format and link multi-part continuations ([P1], [P2], [P3])
-python .\Tecno\continuation_renamer_tecno.py
-python .\Tecno\process_numeric_continuations_tecno.py
+# 3. Recover any journals where dates were inside note bodies
+python .\Tecno\recover_missed_journals_tecno.py
 
-# 4. Extract remaining uncategorized note titles for manual review
+# 4. Standardize multi-part continuations ([P1], [P2])
+python .\Tecno\continuation_renamer_tecno.py
+
+# 5. Extract remaining uncategorized titles for review
 python .\Tecno\extract_uncategorized_tecno.py
+
+# 6. Interactively sort remaining uncategorized notes into misc folders
+python .\Tecno\interactive_sorter_tecno.py
 
 ```
 
@@ -119,20 +125,20 @@ python .\Tecno\extract_uncategorized_tecno.py
 # 1. Run extraction from Xiaomi Notes
 python .\Xiaomi\export_xiaomi_notes.py
 
-# 2. Run precision sweep to recover any missed notes
+# 2. Run sweep to catch any notes skipped during rapid scrolling
 python .\Xiaomi\sweep_missing_xiaomi.py
 
-# 3. Verify total unique note counts against your Xiaomi Notes app counter
-python .\Xiaomi\verify_xiaomi_count.py
+# 3. Sort dated notes into journal_entries
+python .\Xiaomi\journal_sorter_xiaomi.py
 
-# 4. Sort dated notes into journal_entries
-python .\Xiaomi\journal_sorter_xiaomi_.py
+# 4. Run automated category sorter (Dreams, Food, Commute, Acads, etc.)
+python .\Xiaomi\auto_categorizer_xiaomi.py
 
-# 5. Extract dream journal entries
-python .\Xiaomi\dream_sorter_xiaomi.py
+# 5. Extract remaining uncategorized note titles to text file
+python .\Xiaomi\extract_uncategorized_titles_xiaomi.py
 
-# 6. Extract remaining uncategorized note titles for review
-python .\Xiaomi\extract_uncategorized_xiaomi.py
+# 6. Interactively sort remaining notes with live reflection commenting
+python .\Xiaomi\interactive_sorter_xiaomi.py
 
 ```
 
@@ -141,11 +147,19 @@ python .\Xiaomi\extract_uncategorized_xiaomi.py
 ## Output Format Example
 
 ```markdown
-04-28-2024 - [P1] Sample Note Title
+# Sample Note Title
+
+**Date:** Jun. 22, 2024
 
 
 
 Sample body text extracted from the mobile application...
+
+---
+### 💬 Comment galing sa future self mo:
+**Date & Time:** Aug. 30, 2026 | 10:35 PM
+
+Reflections added during sorting...
 
 ```
 
