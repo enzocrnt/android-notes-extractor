@@ -7,13 +7,15 @@ venv/
 .venv/
 env/
 
-# Ignore actual note contents & backups (keeps personal notes private)
+# Ignore all actual note contents, misc categories & backups
 Tecno/journal_entries/
 Tecno/uncategorized/
 Tecno/raw_exports/
+Tecno/misc/
 Xiaomi/journal_entries/
 Xiaomi/uncategorized/
 Xiaomi/raw_exports/
+Xiaomi/misc/
 Xiaomi/dream_journal/
 backups/
 exported_notes/
